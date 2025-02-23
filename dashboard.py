@@ -11,8 +11,9 @@ import os
 # Load environment variables
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
+BASE_URL = "http://api.nessieisreal.com"
 
-# Load the pre-trained Isolation Forest model
+# Load the trained Isolation Forest model
 with open("isolation_forest_model.pkl", "rb") as model_file:
     iso_forest = pickle.load(model_file)
 
@@ -23,7 +24,11 @@ features_for_model = ['amount', 'merchant_category', 'merchant_type', 'num_trans
 st.title("💰 FinTech Dashboard: Customer, Account & Purchase Simulation")
 
 # Sidebar Navigation
-page = st.sidebar.radio("Navigation", ["Create Customer", "Create Account", "Create Merchant", "Simulate Purchase", "View Purchases"])
+page = st.sidebar.radio("Navigation", ["Create Customer", "Create Account", "Create Merchant", "Simulate Purchase", "View Purchases", "View Spending Security Score"])
+
+# Store transaction history
+if "transaction_history" not in st.session_state:
+    st.session_state.transaction_history = []
 
 # -----------------------------------
 # 🚀 Create a New Customer
@@ -57,6 +62,7 @@ if page == "Create Customer":
 
         if response.status_code == 201:
             customer_id = response.json()["objectCreated"]["_id"]
+            st.session_state.last_created_customer_id = customer_id
             st.success(f"✅ Customer Created Successfully! ID: {customer_id}")
         else:
             st.error("❌ Error Creating Customer")
@@ -68,7 +74,6 @@ if page == "Create Customer":
 if page == "Create Account":
     st.header("Create a New Account")
 
-    # Store the last created Customer ID for auto-fill
     if "last_created_customer_id" not in st.session_state:
         st.session_state.last_created_customer_id = ""
 
@@ -81,8 +86,6 @@ if page == "Create Account":
             st.error("❌ Customer ID cannot be empty!")
             st.stop()
 
-        customer_id = customer_id.strip()
-
         url = f"{BASE_URL}/customers/{customer_id}/accounts?key={API_KEY}"
         payload = {
             "type": "Credit Card",
@@ -94,24 +97,16 @@ if page == "Create Account":
         response = requests.post(url, json=payload)
 
         if response.status_code == 201:
-            response_json = response.json()
-            if "objectCreated" in response_json:
-                account_id = response_json["objectCreated"]["_id"]
-                st.session_state.last_created_account_id = account_id  # Store ID
-                st.success(f"✅ Account Created Successfully! **Account ID: {account_id}**")
-                st.code(account_id, language="plaintext")
-            else:
-                st.warning("Account created, but no ID found in the response.")
+            account_id = response.json()["objectCreated"]["_id"]
+            st.session_state.last_created_account_id = account_id
+            st.success(f"✅ Account Created Successfully! **Account ID: {account_id}**")
+            st.code(account_id, language="plaintext")
         else:
             st.error(f"❌ Error Creating Account: {response.text}")
-
-
-
 
 # -----------------------------------
 # 🏬 Create a New Merchant
 # -----------------------------------
-
 if page == "Create Merchant":
     st.header("Create a New Merchant")
 
@@ -144,66 +139,78 @@ if page == "Create Merchant":
         response = requests.post(url, json=payload)
 
         if response.status_code == 201:
-            response_json = response.json()
-            if "objectCreated" in response_json:
-                merchant_id = response_json["objectCreated"]["_id"]
-                st.session_state.last_created_merchant_id = merchant_id  # Store ID
-                st.success(f"✅ Merchant Created Successfully! **Merchant ID: {merchant_id}**")
-                st.code(merchant_id, language="plaintext")
-            else:
-                st.warning("Merchant created, but no ID found in the response.")
+            merchant_id = response.json()["objectCreated"]["_id"]
+            st.session_state.last_created_merchant_id = merchant_id
+            st.success(f"✅ Merchant Created Successfully! **Merchant ID: {merchant_id}**")
+            st.code(merchant_id, language="plaintext")
         else:
             st.error(f"❌ Error Creating Merchant: {response.text}")
 
 
 
-
-
 # -----------------------------------
-# 🛒 Simulate a Purchase
+# 🚀 Simulate a Purchase
 # -----------------------------------
-elif page == "Simulate Purchase":
+if page == "Simulate Purchase":
     st.header("Simulate a Purchase")
-
-    # Ensure last created IDs persist
+    
+    # Ensure IDs persist
     if "last_created_account_id" not in st.session_state:
         st.session_state.last_created_account_id = ""
     if "last_created_merchant_id" not in st.session_state:
         st.session_state.last_created_merchant_id = ""
-
-    st.write("### Available IDs for Easy Copy")
     
-    # Display last created Account ID
+    # Display stored IDs for easy copy
+    st.write("### Available IDs for Easy Copy")
     if st.session_state.last_created_account_id:
         st.write("**Last Created Account ID:**")
         st.code(st.session_state.last_created_account_id, language="plaintext")
     else:
         st.warning("No Account ID available. Please create an account first.")
-
-    # Display last created Merchant ID
+    
     if st.session_state.last_created_merchant_id:
         st.write("**Last Created Merchant ID:**")
         st.code(st.session_state.last_created_merchant_id, language="plaintext")
     else:
         st.warning("No Merchant ID available. Please create a merchant first.")
-
-    # Auto-fill input fields with stored values
+    
+    # User input
     account_id = st.text_input("Account ID", value=st.session_state.last_created_account_id)
     merchant_id = st.text_input("Merchant ID", value=st.session_state.last_created_merchant_id)
     amount = st.number_input("Purchase Amount", min_value=1.0, step=5.0)
     description = st.text_input("Purchase Description", placeholder="e.g., Coffee at Starbucks")
     purchase_date = datetime.today().strftime('%Y-%m-%d')
-
+    
     if st.button("Simulate Purchase"):
         if not account_id.strip() or not merchant_id.strip():
             st.error("❌ Account ID and Merchant ID are required!")
             st.stop()
-
-        # Debugging Output
-        st.write(f"Debug: Account ID Sent `{account_id.strip()}`")
-        st.write(f"Debug: Merchant ID Sent `{merchant_id.strip()}`")
-
-        url = f"{BASE_URL}/accounts/{account_id.strip()}/purchases?key={API_KEY}"
+        
+        # Predict spending risk using Isolation Forest
+        transaction_data = {
+            "amount": amount,
+            "merchant_category": 0,  # Placeholder, needs mapping
+            "merchant_type": 0,  # Placeholder, needs mapping
+            "num_transactions_last_hour": np.random.randint(0, 50),
+            "total_spent_last_hour": np.random.uniform(10, 20000)
+        }
+        anomaly_score = iso_forest.predict(pd.DataFrame([transaction_data]))[0]
+        
+        # Calculate risk score
+        amount_factor = (amount / 1000) * 30  # Scale amount influence
+        risk_score = (70 if anomaly_score == -1 else 30) + amount_factor
+        risk_score = min(max(risk_score, 0), 100)  # Ensure within 0-100
+        
+        # Store transaction in session
+        transaction_info = {
+            "Date": purchase_date,
+            "Amount": amount,
+            "Risk Score": round(risk_score, 2),
+            "Description": description
+        }
+        st.session_state.transaction_history.append(transaction_info)
+        
+        url = f"{BASE_URL}/accounts/{account_id}/purchases?key={API_KEY}"
         payload = {
             "merchant_id": merchant_id.strip(),
             "medium": "balance",
@@ -213,52 +220,40 @@ elif page == "Simulate Purchase":
             "description": description
         }
         response = requests.post(url, json=payload)
-
+        
         if response.status_code == 201:
-            st.success("✅ Purchase Created Successfully!")
-            st.write(response.json())
+            st.success(f"✅ Purchase Created Successfully! Spending Security Score: {round(risk_score, 2)}")
+            if risk_score > 80:
+                st.error("🚨 High-Risk Transaction! Consider reviewing before proceeding.")
+                st.warning("🔔 ALERT: High-risk transaction detected! Please verify manually.")
+            elif risk_score > 50:
+                st.warning("⚠️ Medium Risk: Spending above usual patterns.")
+            else:
+                st.success("✅ Low Risk: Normal spending behavior.")
         else:
             st.error(f"❌ Error Creating Purchase: {response.text}")
 
-
-
-
 # -----------------------------------
-# 🔍 View Purchases & Detect Overspending
+# 📊 View Spending Security Score
 # -----------------------------------
-elif page == "View Purchases":
-    st.header("View Purchases & Detect Overspending")
-
-    account_id = st.text_input("Enter Account ID to View Purchases", placeholder="Paste Account ID here")
-
-    if st.button("Fetch Purchases"):
-        url = f"{BASE_URL}/accounts/{account_id}/purchases?key={API_KEY}"
-        response = requests.get(url)
-
-        if response.status_code == 200:
-            transactions = response.json()
-
-            if not transactions:
-                st.warning("No transactions found for this account.")
-            else:
-                df = pd.DataFrame(transactions)
-
-                # Simulated placeholders for missing features
-                df['merchant_category'] = 0  
-                df['merchant_type'] = 0  
-                df['num_transactions_last_hour'] = np.random.randint(0, 50, len(df))
-                df['total_spent_last_hour'] = np.random.uniform(10, 20000, len(df))
-
-                # Predict overspending
-                df['overspending_flag'] = iso_forest.predict(df[features_for_model])
-                df['overspending_flag'] = df['overspending_flag'].apply(lambda x: 1 if x == -1 else 0)
-
-                st.write("### Transactions")
-                st.dataframe(df)
-
-                flagged = df[df['overspending_flag'] == 1]
-                if not flagged.empty:
-                    st.error("🚨 Overspending Alert! These transactions were flagged:")
-                    st.dataframe(flagged)
-                else:
-                    st.success("✅ No overspending detected.")
+elif page == "View Spending Security Score":
+    st.header("📊 Spending Security Score Over Time")
+    
+    if len(st.session_state.transaction_history) > 0:
+        df_history = pd.DataFrame(st.session_state.transaction_history)
+        df_history = df_history.sort_values(by="Date")
+        
+        # Plot risk score trend
+        fig, ax = plt.subplots()
+        ax.plot(df_history["Date"], df_history["Risk Score"], marker='o', linestyle='-', color='red')
+        ax.set_title("Spending Security Score Trend")
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Risk Score (0-100)")
+        ax.grid()
+        st.pyplot(fig)
+        
+        # Display latest transactions
+        st.write("### Recent Transactions & Risk Scores")
+        st.dataframe(df_history.sort_values(by="Date", ascending=False))
+    else:
+        st.warning("No transactions available. Simulate purchases to see the Spending Security Score trend.")
