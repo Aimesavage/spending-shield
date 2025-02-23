@@ -24,7 +24,8 @@ features_for_model = ['amount', 'merchant_category', 'merchant_type', 'num_trans
 st.title("💰 FinTech Dashboard: Customer, Account & Purchase Simulation")
 
 # Sidebar Navigation
-page = st.sidebar.radio("Navigation", ["Create Customer", "Create Account", "Create Merchant", "Simulate Purchase", "View Purchases", "View Spending Security Score"])
+page = st.sidebar.radio("Navigation", ["Create Customer", "Create Account", "Create Merchant", "Simulate Purchase", "View Purchases", "View Spending Security Score",
+    "View Financial Incident Report"])
 
 # Store transaction history
 if "transaction_history" not in st.session_state:
@@ -257,3 +258,9 @@ elif page == "View Spending Security Score":
         st.dataframe(df_history.sort_values(by="Date", ascending=False))
     else:
         st.warning("No transactions available. Simulate purchases to see the Spending Security Score trend.")
+
+# -----------------------------------
+# 📈 View Financial Incident Report 
+# -----------------------------------
+if page == "View Financial Incident Report":
+    st.header("📈 View Financial Incident Report ")
