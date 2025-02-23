@@ -30,7 +30,13 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-7t&xs4%b9k_m8d3qj=^dcs@0*6
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '18.116.14.91',
+    'localhost:8000',
+    '127.0.0.1:8000',
+]
 
 
 # Application definition
@@ -44,11 +50,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'api.apps.ApiConfig',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -145,3 +153,13 @@ LOGGING = {
         'level': 'DEBUG',
     },
 }
+
+# CORS settings
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://18.116.14.91:8000",
+    "http://localhost:8501",  # For Streamlit
+    "http://127.0.0.1:8501",
+]
