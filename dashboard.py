@@ -13,13 +13,13 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 BASE_URL = "http://api.nessieisreal.com"
 
-# Load the trained Isolation Forest model
-with open("isolation_forest_model.pkl", "rb") as model_file:
-    iso_forest = pickle.load(model_file)
-
-# Define feature names used in the model
-features_for_model = ['amount', 'merchant_category', 'merchant_type',
-    'num_transactions_last_hour', 'total_spent_last_hour']
+# Load the improved model and its components
+with open("improved_isolation_forest_model.pkl", "rb") as model_file:
+    model_data = pickle.load(model_file)
+    iso_forest = model_data['model']
+    features_for_model = model_data['features']
+    label_encoders = model_data['label_encoders']
+    scaler = model_data['scaler']
 
 # Category and Type Mapping
 category_mapping = {
@@ -37,25 +37,22 @@ category_mapping = {
 st.title("💰 FinTech Dashboard: Customer, Account & Purchase Simulation")
 
 # Sidebar Navigation
-page = st.sidebar.radio("Navigation", [
-                        "Create Customer", "Create Account", "Create Merchant", "Simulate Purchase"])
+page = st.sidebar.radio("Navigation", ["Create Customer", "Create Account", "Create Merchant", "Simulate Purchase"])
 
 # Store transaction history
 if "transaction_history" not in st.session_state:
     st.session_state.transaction_history = []
 
 # -----------------------------------
-# 🚀 Create a New Customer
+# Create a New Customer
 # -----------------------------------
 if page == "Create Customer":
     st.header("Create a New Customer")
-    first_name = st.text_input(
-        "First Name", placeholder="e.g., John", value="string")
-    last_name = st.text_input(
-        "Last Name", placeholder="e.g., Doe", value="string")
+    first_name = st.text_input("First Name", placeholder="e.g., John", value="string")
+    last_name = st.text_input("Last Name", placeholder="e.g., Doe", value="string")
     state = st.text_input("State", placeholder="e.g., NY")
     zip_code = st.text_input("ZIP Code", placeholder="e.g., 10001")
-
+    
     if st.button("Create Customer"):
         url = f"{BASE_URL}/customers?key={API_KEY}"
         payload = {
@@ -70,7 +67,7 @@ if page == "Create Customer":
             }
         }
         response = requests.post(url, json=payload)
-
+        
         if response.status_code == 201:
             customer_id = response.json()["objectCreated"]["_id"]
             st.session_state.last_created_customer_id = customer_id
@@ -80,16 +77,15 @@ if page == "Create Customer":
             st.write(response.text)
 
 # -----------------------------------
-# 💳 Create a New Account
+# Create a New Account
 # -----------------------------------
 if page == "Create Account":
     st.header("Create a New Account")
     if "last_created_customer_id" not in st.session_state:
         st.session_state.last_created_customer_id = ""
-    customer_id = st.text_input(
-        "Customer ID", value=st.session_state.last_created_customer_id)
+    customer_id = st.text_input("Customer ID", value=st.session_state.last_created_customer_id)
     balance = st.number_input("Initial Balance", min_value=0.0, step=10.0)
-
+    
     if st.button("Create Account"):
         url = f"{BASE_URL}/customers/{customer_id}/accounts?key={API_KEY}"
         payload = {
@@ -99,23 +95,21 @@ if page == "Create Account":
             "balance": balance
         }
         response = requests.post(url, json=payload)
-
+        
         if response.status_code == 201:
             account_id = response.json()["objectCreated"]["_id"]
             st.session_state.last_created_account_id = account_id
-            st.success(
-                f"✅ Account Created Successfully! **Account ID: {account_id}**")
+            st.success(f"✅ Account Created Successfully! **Account ID: {account_id}**")
             st.code(account_id, language="plaintext")
         else:
             st.error(f"❌ Error Creating Account: {response.text}")
 
 # -----------------------------------
-# 🏬 Create a New Merchant
+# Create a New Merchant
 # -----------------------------------
 if page == "Create Merchant":
     st.header("Create a New Merchant")
-    merchant_name = st.text_input(
-        "Merchant Name", placeholder="e.g., Starbucks", value="string")
+    merchant_name = st.text_input("Merchant Name", placeholder="e.g., Starbucks", value="string")
     category = st.selectbox("Category", list(category_mapping.keys()))
     merchant_type = st.selectbox("Merchant Type", category_mapping[category])
     state = st.text_input("State", placeholder="e.g., GA")
@@ -136,155 +130,148 @@ if page == "Create Merchant":
             "geocode": {"lat": 0, "lng": 0}
         }
         response = requests.post(url, json=payload)
-
+        
         if response.status_code == 201:
             merchant_id = response.json()["objectCreated"]["_id"]
             st.session_state.last_created_merchant_id = merchant_id
-            st.success(
-                f"✅ Merchant Created Successfully! **Merchant ID: {merchant_id}**")
+            st.success(f"✅ Merchant Created Successfully! **Merchant ID: {merchant_id}**")
             st.code(merchant_id, language="plaintext")
         else:
             st.error(f"❌ Error Creating Merchant: {response.text}")
-
 
 # -----------------------------------
 # 🚀 Simulate a Purchase
 # -----------------------------------
 elif page == "Simulate Purchase":
     st.header("Simulate a Purchase")
-
-    # Initialize session state variables for IDs if not present
+    
     if "last_created_account_id" not in st.session_state:
         st.session_state.last_created_account_id = ""
     if "last_created_merchant_id" not in st.session_state:
         st.session_state.last_created_merchant_id = ""
 
-    # Display available IDs
-    st.write("### Available IDs for Easy Copy")
-    if st.session_state.last_created_account_id:
-        st.code(st.session_state.last_created_account_id, language="plaintext")
-    else:
-        st.warning("No Account ID available. Please create an account first.")
-    if st.session_state.last_created_merchant_id:
-        st.code(st.session_state.last_created_merchant_id, language="plaintext")
-    else:
-        st.warning("No Merchant ID available. Please create a merchant first.")
 
-    # Capture purchase details using a form
-    with st.form("purchase_form"):
-        account_id = st.text_input("Account ID", value=st.session_state.last_created_account_id)
-        merchant_id = st.text_input("Merchant ID", value=st.session_state.last_created_merchant_id)
-        amount = st.number_input("Purchase Amount", min_value=1.0, step=5.0)
-        cat_options = list(category_mapping.keys())
-        selected_cat = st.selectbox("Merchant Category", cat_options)
-        selected_type = st.selectbox("Merchant Type", category_mapping[selected_cat])
-        num_transactions_last_hour = st.number_input("Transactions in Last Hour", min_value=0, step=1)
-        total_spent_last_hour = st.number_input("Total Spent in Last Hour", min_value=0.0, step=10.0)
-        description = st.text_input("Purchase Description", placeholder="e.g., Coffee at Starbucks")
-        purchase_date = datetime.today().strftime('%Y-%m-%d')
-        submitted = st.form_submit_button("Simulate Purchase")
 
-    if submitted:
+    account_id = st.text_input("Account ID", value=st.session_state.last_created_account_id)
+    merchant_id = st.text_input("Merchant ID", value=st.session_state.last_created_merchant_id)
+    amount = st.number_input("Purchase Amount", min_value=1.0, step=5.0)
+    
+    cat_options = list(category_mapping.keys())
+    selected_cat = st.selectbox("Merchant Category", cat_options)
+    selected_type = st.selectbox("Merchant Type", category_mapping[selected_cat])
+    
+    # New fields for improved model
+    num_transactions_last_hour = st.number_input("Transactions in Last Hour", min_value=0, step=1)
+    total_spent_last_hour = st.number_input("Total Spent in Last Hour", min_value=0.0, step=10.0)
+    distance_from_home = st.slider("Distance from Home (normalized)", 0.0, 1.0, 0.1)
+    transaction_hour = st.number_input("Hour of Day (0-23)", min_value=0, max_value=23, value=datetime.now().hour)
+    
+    description = st.text_input("Purchase Description", placeholder="e.g., Coffee at Starbucks")
+    purchase_date = datetime.today().strftime('%Y-%m-%d')
+
+    if st.button("Simulate Purchase"):
         if not account_id.strip() or not merchant_id.strip():
             st.error("❌ Account ID and Merchant ID are required!")
+            st.stop()
+
+        # Prepare transaction data for model
+        transaction_data = {
+            'amount': amount,
+            'merchant_category': label_encoders['merchant_category'].transform([selected_cat])[0],
+            'merchant_type': label_encoders['merchant_type'].transform([selected_type])[0],
+            'num_transactions_last_hour': num_transactions_last_hour,
+            'total_spent_last_hour': total_spent_last_hour,
+            'amount_to_average_ratio': amount / 100,  # simplified ratio for demo
+            'transaction_hour': transaction_hour,
+            'is_weekend': 1 if datetime.now().weekday() >= 5 else 0,
+            'distance_from_home': distance_from_home
+        }
+
+        # Create DataFrame for scaling
+        numerical_features = ['amount', 'distance_from_home', 'num_transactions_last_hour', 'total_spent_last_hour', 'amount_to_average_ratio']
+        numerical_data = [[transaction_data[feature] for feature in numerical_features]]
+        scaled_features = scaler.transform(numerical_data)
+
+        # Update transaction_data with scaled values
+        for i, feature in enumerate(numerical_features):
+            transaction_data[feature] = scaled_features[0][i]
+
+        # Create DataFrame for prediction
+        pred_df = pd.DataFrame([transaction_data])
+        
+        # Get model prediction
+        model_prediction = iso_forest.predict(pred_df[features_for_model])[0]
+
+        # Apply business rules
+        high_risk_conditions = [
+            transaction_data['amount_to_average_ratio'] > 3,
+            transaction_data['distance_from_home'] > 0.8,
+            transaction_data['num_transactions_last_hour'] > 5
+        ]
+        business_rules_flag = 1 if any(high_risk_conditions) else 0
+
+        # Combined risk assessment
+        is_risky = (model_prediction == -1) or (business_rules_flag == 1)
+        
+        # Calculate risk score
+        if is_risky:
+            risk_score = 50 + min(amount / 20, 50)
         else:
-            # Prepare transaction data for anomaly detection
-            transaction_data = {
-                "amount": amount,
-                "merchant_category": cat_options.index(selected_cat),
-                "merchant_type": category_mapping[selected_cat].index(selected_type),
-                "num_transactions_last_hour": num_transactions_last_hour,
-                "total_spent_last_hour": total_spent_last_hour
-            }
-            anomaly_score = iso_forest.predict(pd.DataFrame([transaction_data]))[0]
+            risk_score = max(10, min(amount / 20, 50))
+        risk_score = min(max(risk_score, 0), 100)
 
-            # For very low-value transactions, ignore anomalies
-            if amount < 5:
-                anomaly_score = 1
+        # Store transaction info
+        transaction_info = {
+            "Date": purchase_date,
+            "Amount": amount,
+            "Risk Score": round(risk_score, 2),
+            "Description": description,
+            "Model Flag": "High Risk" if model_prediction == -1 else "Normal",
+            "Business Rules Flag": "High Risk" if business_rules_flag == 1 else "Normal"
+        }
+        st.session_state.transaction_history.append(transaction_info)
 
-            if anomaly_score == -1:
-                # Suspicious transaction: calculate risk and prompt confirmation
-                risk_score = min(60 + (amount / 10), 100)
-                st.warning(f"⚠️ Suspicious activity detected! Risk Score: {round(risk_score, 2)}")
-                # Save details for later confirmation
-                st.session_state.purchase_data = {
-                    "account_id": account_id,
-                    "merchant_id": merchant_id,
-                    "amount": amount,
-                    "selected_cat": selected_cat,
-                    "selected_type": selected_type,
-                    "num_transactions_last_hour": num_transactions_last_hour,
-                    "total_spent_last_hour": total_spent_last_hour,
-                    "description": description,
-                    "purchase_date": purchase_date,
-                    "risk_score": risk_score,
-                    "anomaly_score": anomaly_score
-                }
-            else:
-                # No anomaly: automatically process purchase
-                risk_score = max(10, min(30 + (amount / 50), 60))
-                if "transaction_history" not in st.session_state:
-                    st.session_state.transaction_history = []
-                transaction_info = {
-                    "Date": purchase_date,
-                    "Amount": amount,
-                    "Risk Score": round(risk_score, 2),
-                    "Description": description
-                }
-                st.session_state.transaction_history.append(transaction_info)
-                url = f"{BASE_URL}/accounts/{account_id}/purchases?key={API_KEY}"
-                payload = {
-                    "merchant_id": merchant_id.strip(),
-                    "medium": "balance",
-                    "purchase_date": purchase_date,
-                    "amount": amount,
-                    "status": "pending",
-                    "description": description
-                }
-                response = requests.post(url, json=payload)
-                if response.status_code == 201:
-                    st.success(f"✅ Purchase Created Successfully! Spending Security Score: {round(risk_score, 2)}")
-                else:
-                    st.error(f"❌ Error Creating Purchase: {response.text}")
+        # Create purchase in API
+        url = f"{BASE_URL}/accounts/{account_id}/purchases?key={API_KEY}"
+        payload = {
+            "merchant_id": merchant_id.strip(),
+            "medium": "balance",
+            "purchase_date": purchase_date,
+            "amount": amount,
+            "status": "pending",
+            "description": description
+        }
+        response = requests.post(url, json=payload)
 
-    # Conditionally display confirmation only if an anomaly was detected
-    if "purchase_data" in st.session_state:
-        st.write("### Confirm Suspicious Purchase")
-        col1, col2 = st.columns(2)
-        if col1.button("Proceed Anyway"):
-            try:
-                data = st.session_state.purchase_data
-                risk_score = data["risk_score"]
-                if "transaction_history" not in st.session_state:
-                    st.session_state.transaction_history = []
-                transaction_info = {
-                    "Date": data["purchase_date"],
-                    "Amount": data["amount"],
-                    "Risk Score": round(risk_score, 2),
-                    "Description": data["description"]
+        if response.status_code == 201:
+            # Define colors based on risk levels
+            score_color = "rgba(255, 87, 87, 0.2)" if risk_score > 50 else "rgba(87, 255, 87, 0.2)"
+            model_color = "rgba(255, 87, 87, 0.2)" if model_prediction == -1 else "rgba(87, 255, 87, 0.2)"
+            rules_color = "rgba(255, 87, 87, 0.2)" if business_rules_flag == 1 else "rgba(87, 255, 87, 0.2)"
+            
+            # Create styled boxes using HTML/CSS
+            st.markdown("""
+                <style>
+                .risk-box {
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin: 10px 0;
+                    backdrop-filter: blur(5px);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
                 }
-                st.session_state.transaction_history.append(transaction_info)
-                url = f"{BASE_URL}/accounts/{data['account_id']}/purchases?key={API_KEY}"
-                payload = {
-                    "merchant_id": data["merchant_id"].strip(),
-                    "medium": "balance",
-                    "purchase_date": data["purchase_date"],
-                    "amount": data["amount"],
-                    "status": "pending",
-                    "description": data["description"]
-                }
-                response = requests.post(url, json=payload)
-                if response.status_code == 201:
-                    st.success(f"✅ Purchase Created Successfully! Spending Security Score: {round(risk_score, 2)}")
-                else:
-                    st.error(f"❌ Error Creating Purchase: {response.text}")
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
-            finally:
-                # Clear the purchase data to hide confirmation buttons
-                del st.session_state.purchase_data
-
-        if col2.button("Cancel Purchase"):
-            st.info("🏁 Purchase simulation cancelled")
-            del st.session_state.purchase_data
-
+                </style>
+            """, unsafe_allow_html=True)
+            
+            st.markdown(f"""
+                <div class="risk-box" style="background-color: {score_color}">
+                    ✨ Spending Security Score: {round(risk_score, 2)}
+                </div>
+                <div class="risk-box" style="background-color: {model_color}">
+                    🤖 Model Assessment: {"High Risk" if model_prediction == -1 else "Normal"}
+                </div>
+                <div class="risk-box" style="background-color: {rules_color}">
+                    📋 Business Rules Assessment: {"High Risk" if business_rules_flag == 1 else "Normal"}
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.error(f"❌ Error Creating Purchase: {response.text}")
