@@ -186,43 +186,25 @@ if page == "Simulate Purchase":
             st.error("❌ Account ID and Merchant ID are required!")
             st.stop()
         
-        # Predict spending risk using Isolation Forest
-        transaction_data = {
-            "amount": amount,
-            "merchant_category": 0,  # Placeholder, needs mapping
-            "merchant_type": 0,  # Placeholder, needs mapping
-            "num_transactions_last_hour": np.random.randint(0, 50),
-            "total_spent_last_hour": np.random.uniform(10, 20000)
-        }
-        anomaly_score = iso_forest.predict(pd.DataFrame([transaction_data]))[0]
-        
-        # Calculate risk score
-        amount_factor = (amount / 1000) * 30  # Scale amount influence
-        risk_score = (70 if anomaly_score == -1 else 30) + amount_factor
-        risk_score = min(max(risk_score, 0), 100)  # Ensure within 0-100
-        
-        # Store transaction in session
-        transaction_info = {
-            "Date": purchase_date,
-            "Amount": amount,
-            "Risk Score": round(risk_score, 2),
-            "Description": description
-        }
-        st.session_state.transaction_history.append(transaction_info)
-        
-        url = f"{BASE_URL}/accounts/{account_id}/purchases?key={API_KEY}"
-        payload = {
-            "merchant_id": merchant_id.strip(),
-            "medium": "balance",
-            "purchase_date": purchase_date,
-            "amount": amount,
-            "status": "pending",
-            "description": description
-        }
-        response = requests.post(url, json=payload)
+        # Call backend API to create transaction
+        response = requests.post(
+            "http://localhost:8000/api/create-transaction/",
+            json={
+                "account_id": account_id.strip(),
+                "merchant_id": merchant_id.strip(),
+                "amount": amount,
+                "description": description
+            }
+        )
         
         if response.status_code == 201:
-            st.success(f"✅ Purchase Created Successfully! Spending Security Score: {round(risk_score, 2)}")
+            data = response.json()
+            risk_score = data["risk_score"]
+            transaction_info = data["transaction"]
+            
+            st.session_state.transaction_history.append(transaction_info)
+            
+            st.success(f"✅ Purchase Created Successfully! Spending Security Score: {risk_score}")
             if risk_score > 80:
                 st.error("🚨 High-Risk Transaction! Consider reviewing before proceeding.")
                 st.warning("🔔 ALERT: High-risk transaction detected! Please verify manually.")

@@ -7,6 +7,8 @@ from rest_framework import status
 from .models import User
 from .serializers import UserSerializer
 import logging
+from rest_framework.decorators import api_view
+from .services.transaction_service import analyze_transaction, create_transaction_record
 
 logger = logging.getLogger(__name__)
 
@@ -70,4 +72,31 @@ class UserViewSet(viewsets.ViewSet):
         except Exception as e:
             logger.error(f"Error deleting user: {str(e)}")
             return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+def analyze_transaction_view(request):
+    try:
+        risk_score = analyze_transaction(request.data)
+        return Response({"risk_score": risk_score}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+def create_transaction_view(request):
+    try:
+        account_id = request.data.get('account_id')
+        merchant_id = request.data.get('merchant_id')
+        amount = request.data.get('amount')
+        description = request.data.get('description')
+        
+        transaction_info, risk_score = create_transaction_record(
+            account_id, merchant_id, amount, description
+        )
+        
+        return Response({
+            "transaction": transaction_info,
+            "risk_score": risk_score
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
