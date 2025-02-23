@@ -2,8 +2,10 @@ from django.db import models
 from djongo import models as djongo_models
 from bson import ObjectId
 
+
 class User(models.Model):
-    id = djongo_models.ObjectIdField(primary_key=True, default=ObjectId)  # Changed from _id to id
+    id = djongo_models.ObjectIdField(
+        primary_key=True, default=ObjectId)  # Changed from _id to id
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     income = models.DecimalField(max_digits=10, decimal_places=2)
