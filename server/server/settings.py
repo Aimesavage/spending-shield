@@ -91,9 +91,10 @@ WSGI_APPLICATION = 'server.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'djongo',
-        'NAME': 'db',
+        'NAME': 'spending_shield_db',
+        'ENFORCE_SCHEMA': False,
         'CLIENT': {
-            'host': os.getenv('MONGODB_URI'),
+            'host': 'mongodb+srv://salmaanejaz:HwpfFt3P0hLmGgYk@hacklytics.nmeb6.mongodb.net/?retryWrites=true&w=majority&appName=hacklytics',
         }
     }
 }

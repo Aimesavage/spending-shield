@@ -16,3 +16,18 @@ class User(models.Model):
 
     def __str__(self):
         return self.name
+
+class Transaction(models.Model):
+    id = djongo_models.ObjectIdField(primary_key=True, default=ObjectId)
+    account_id = models.CharField(max_length=100)
+    merchant_id = models.CharField(max_length=100)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.TextField(blank=True, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    risk_score = models.FloatField(default=0.0)
+
+    class Meta:
+        db_table = 'transactions'
+
+    def __str__(self):
+        return f"{self.account_id} - ${self.amount}"

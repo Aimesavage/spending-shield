@@ -4,11 +4,13 @@ from django.shortcuts import render
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework import status
-from .models import User
+from .models import User, Transaction
 from .serializers import UserSerializer
 import logging
 from rest_framework.decorators import api_view
 from .services.transaction_service import analyze_transaction, create_transaction_record
+from decimal import Decimal
+import random  # Temporary for demo purposes
 
 logger = logging.getLogger(__name__)
 
@@ -98,5 +100,75 @@ def create_transaction_view(request):
             "risk_score": risk_score
         }, status=status.HTTP_201_CREATED)
     except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+def create_transaction_record(account_id, merchant_id, amount, description):
+    try:
+        # Create and save the transaction
+        transaction = Transaction.objects.create(
+            account_id=account_id,
+            merchant_id=merchant_id,
+            amount=Decimal(str(amount)),
+            description=description,
+            risk_score=0.0  # We'll update this after creation
+        )
+        
+        # Simple risk analysis (for demo purposes)
+        risk_factors = {
+            'amount': float(amount),
+            'merchant_category': 'RETAIL',  # Default category
+            'merchant_type': 'ONLINE',      # Default type
+            'num_transactions_last_hour': random.randint(0, 5),
+            'total_spent_last_hour': random.randint(0, 1000)
+        }
+        
+        # Calculate risk score (0-100)
+        risk_score = min(100, (float(amount) / 1000 * 30) +  # Amount factor
+                        (risk_factors['num_transactions_last_hour'] * 10) +  # Frequency factor
+                        (risk_factors['total_spent_last_hour'] / 1000 * 20))  # Spending pattern factor
+        
+        # Update transaction with risk score
+        transaction.risk_score = risk_score
+        transaction.save()
+        
+        # Format response
+        transaction_info = {
+            'id': str(transaction.id),
+            'account_id': transaction.account_id,
+            'merchant_id': transaction.merchant_id,
+            'amount': float(transaction.amount),
+            'description': transaction.description,
+            'timestamp': transaction.timestamp.isoformat(),
+            'risk_score': risk_score
+        }
+        
+        return transaction_info, risk_score
+        
+    except Exception as e:
+        raise Exception(f"Failed to create transaction: {str(e)}")
+
+@api_view(['GET'])
+def get_transactions(request):
+    try:
+        transactions = Transaction.objects.all().order_by('-timestamp')
+        transaction_list = []
+        
+        for transaction in transactions:
+            # Convert Decimal128 to float
+            amount = float(str(transaction.amount))
+            
+            transaction_list.append({
+                'id': str(transaction.id),
+                'account_id': transaction.account_id,
+                'merchant_id': transaction.merchant_id,
+                'amount': amount,
+                'description': transaction.description,
+                'timestamp': transaction.timestamp.isoformat(),
+                'risk_score': float(transaction.risk_score)
+            })
+        
+        return Response(transaction_list, status=status.HTTP_200_OK)
+    except Exception as e:
+        print(f"Error in get_transactions: {str(e)}")  # Debug print
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

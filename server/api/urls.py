@@ -2,7 +2,8 @@ from django.urls import path
 from .views import (
     UserViewSet, 
     analyze_transaction_view,
-    create_transaction_view
+    create_transaction_view,
+    get_transactions
 )
 
 urlpatterns = [
@@ -15,6 +16,7 @@ urlpatterns = [
         'put': 'update',
         'delete': 'destroy'
     })),
-    path('analyze-transaction/', analyze_transaction_view, name='analyze_transaction'),
-    path('create-transaction/', create_transaction_view, name='create_transaction'),
+    path('analyze-transaction/', analyze_transaction_view, name='analyze-transaction'),
+    path('create-transaction/', create_transaction_view, name='create-transaction'),
+    path('transactions/', get_transactions, name='get-transactions'),
 ]

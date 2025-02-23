@@ -30,7 +30,7 @@ def analyze_transaction(transaction_data):
 
 def create_transaction_record(account_id, merchant_id, amount, description):
     """Create transaction record with risk analysis"""
-    purchase_date = datetime.today().strftime('%Y-%m-%d')
+    current_time = datetime.now().isoformat()
     
     # Generate transaction data for analysis
     transaction_data = {
@@ -44,10 +44,10 @@ def create_transaction_record(account_id, merchant_id, amount, description):
     risk_score = analyze_transaction(transaction_data)
     
     transaction_info = {
-        "Date": purchase_date,
-        "Amount": amount,
-        "Risk Score": risk_score,
-        "Description": description,
+        "timestamp": current_time,
+        "amount": float(amount),
+        "risk_score": risk_score,
+        "description": description,
         "account_id": account_id,
         "merchant_id": merchant_id
     }
